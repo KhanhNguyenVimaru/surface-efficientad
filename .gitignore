@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
+env/
+ENV/
+
+# FastAPI / local outputs
+results/
+logs/
+*.log
+
+# Models / datasets (large files)
+checkpoints/
+mvtec_anomaly_detection/
+
+# Frontend (Nuxt)
+web/node_modules/
+web/.nuxt/
+web/.output/
+web/.nitro/
+web/.cache/
+web/.data/
+web/.env
+web/.env.*
+web/dist/
+
+# Local clone/reference
+_upstream_surface_efficientad_model/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
