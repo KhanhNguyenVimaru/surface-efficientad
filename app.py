@@ -15,9 +15,11 @@ from pydantic import BaseModel
 try:
     from anomalib.engine import Engine
     from anomalib.models import EfficientAd
+    from anomalib.models.image.efficient_ad.lightning_model import EfficientAdModelSize
 except Exception as e:
     Engine = None
     EfficientAd = None
+    EfficientAdModelSize = None
     IMPORT_ERROR = e
 else:
     IMPORT_ERROR = None
@@ -315,7 +317,7 @@ def run_ckpt_prediction(ckpt_path: Path, pil_image: Image.Image) -> Any:
             pil_image.save(tmp_file, format="PNG")
 
         engine = Engine()
-        model = EfficientAd()
+        model = EfficientAd(model_size=EfficientAdModelSize.M)
         predictions = engine.predict(model=model, ckpt_path=ckpt_path, data_path=temp_path)
         if not predictions:
             raise ValueError("No predictions returned by anomalib Engine.predict")
@@ -344,7 +346,7 @@ def list_models() -> dict[str, Any]:
 async def predict(
     image: UploadFile = File(...),
     model_name: str = Form("capsule"),
-    threshold: float = Form(8.0),
+    threshold: float = Form(0.5),
 ) -> PredictResponse:
     if IMPORT_ERROR is not None:
         raise HTTPException(status_code=500, detail=f"anomalib import failed: {IMPORT_ERROR}")

@@ -15,7 +15,7 @@ type PredictResponse = {
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBase
 
-const threshold = ref(8.0)
+const threshold = ref(0.5)
 const imageFile = ref<File | null>(null)
 const imagePreview = ref('')
 const loading = ref(false)
@@ -59,6 +59,50 @@ const defectTypeColor = computed(() => {
   if (defect === 'scratch') return 'warning'
   if (defect === 'squeeze') return 'error'
   return 'neutral'
+})
+
+const scorePercent = computed(() => {
+  const s = result.value?.score
+  if (s == null) return 0
+  return Math.min(Math.max(s, 0), 1) * 100
+})
+
+const gaugePath = computed(() => {
+  const r = 80
+  const cx = 100
+  const cy = 100
+  const startAngle = 135
+  const endAngle = 45
+  const rad = (deg: number) => (deg * Math.PI) / 180
+  const x1 = cx + r * Math.cos(rad(startAngle))
+  const y1 = cy + r * Math.sin(rad(startAngle))
+  const x2 = cx + r * Math.cos(rad(endAngle))
+  const y2 = cy + r * Math.sin(rad(endAngle))
+  return `M ${x1} ${y1} A ${r} ${r} 0 1 1 ${x2} ${y2}`
+})
+
+const gaugeNeedle = computed(() => {
+  const r = 70
+  const cx = 100
+  const cy = 100
+  const angle = 135 + (scorePercent.value / 100) * 270
+  const rad = (deg: number) => (deg * Math.PI) / 180
+  return {
+    x: cx + r * Math.cos(rad(angle)),
+    y: cy + r * Math.sin(rad(angle)),
+  }
+})
+
+const barWidth = computed(() => {
+  const s = result.value?.score
+  if (s == null) return 0
+  return Math.min(Math.max(s, 0), 1) * 100
+})
+
+const thresholdBarWidth = computed(() => {
+  const t = result.value?.threshold
+  if (t == null) return 0
+  return Math.min(Math.max(t, 0), 1) * 100
 })
 
 function onImageChanged(event: Event) {
@@ -120,7 +164,7 @@ async function runPrediction() {
             </div>
           </template>
 
-          <div class="grid gap-4 md:grid-cols-1">
+          <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
               <label class="block text-sm font-medium">Input image</label>
               <input
@@ -130,6 +174,17 @@ async function runPrediction() {
                 @change="onImageChanged"
               >
             </div>
+            <div class="space-y-2">
+              <label class="block text-sm font-medium">Threshold (0–1)</label>
+              <input
+                v-model.number="threshold"
+                class="block w-full rounded-md border border-default px-3 py-2 bg-default text-sm"
+                type="number"
+                step="0.01"
+                min="0"
+                max="1"
+              >
+            </div>
           </div>
 
           <div class="mt-4 flex items-center gap-3">
@@ -137,7 +192,7 @@ async function runPrediction() {
               Run prediction
             </UButton>
             <UBadge variant="soft" color="neutral">Model: capsule (fixed)</UBadge>
-            <UBadge variant="soft" color="neutral">Threshold: {{ threshold.toFixed(1) }} (fixed)</UBadge>
+            <UBadge variant="soft" color="neutral">Threshold: {{ threshold.toFixed(2) }}</UBadge>
             <UBadge variant="soft" color="neutral">API: {{ apiBase }}</UBadge>
           </div>
 
@@ -164,22 +219,46 @@ async function runPrediction() {
             <template #header>
               <h2 class="font-semibold">Prediction Summary</h2>
             </template>
-            <div v-if="result" class="space-y-2 text-sm">
-              <p><span class="font-medium">Model:</span> {{ result.model }}</p>
-              <p class="flex items-center gap-2">
-                <span class="font-medium">Label:</span>
-                <UBadge :color="labelColor" variant="soft">{{ result.label }}</UBadge>
-              </p>
-              <p class="flex items-center gap-2">
-                <span class="font-medium">Defect type:</span>
-                <UBadge :color="defectTypeColor" variant="soft">
-                  {{ defectTypeText }}
-                </UBadge>
-              </p>
-              <p><span class="font-medium">Defect confidence:</span> {{ result.defect_confidence ?? 'N/A' }}</p>
-              <p><span class="font-medium">Score:</span> {{ result.score ?? 'N/A' }}</p>
-              <p><span class="font-medium">Pred label:</span> {{ result.pred_label ?? 'N/A' }}</p>
-              <p><span class="font-medium">Threshold:</span> {{ result.threshold.toFixed(2) }}</p>
+            <div v-if="result" class="space-y-4 flex flex-col items-center justify-center h-full">
+              <!-- Gauge Chart -->
+              <div class="flex justify-center">
+                <svg viewBox="0 0 200 120" class="w-48 h-28">
+                  <defs>
+                    <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stop-color="#22c55e" />
+                      <stop offset="50%" stop-color="#eab308" />
+                      <stop offset="100%" stop-color="#ef4444" />
+                    </linearGradient>
+                  </defs>
+                  <path :d="gaugePath" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" />
+                  <circle cx="100" cy="100" r="4" fill="#374151" />
+                  <line x1="100" y1="100" :x2="gaugeNeedle.x" :y2="gaugeNeedle.y" stroke="#374151" stroke-width="3" stroke-linecap="round" />
+                  <text x="100" y="115" text-anchor="middle" font-size="14" font-weight="bold" fill="#374151">{{ result.score?.toFixed(3) ?? 'N/A' }}</text>
+                </svg>
+              </div>
+
+              <!-- Bar Chart -->
+              <div class="space-y-2">
+                <div class="flex items-center gap-2 text-xs">
+                  <span class="w-16 font-medium">Score</span>
+                  <div class="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all duration-500" :style="{ width: barWidth + '%' }"></div>
+                  </div>
+                  <span class="w-12 text-right">{{ result.score?.toFixed(3) }}/{{ threshold.toFixed(2) }}</span>
+                </div>
+              </div>
+
+              <!-- Info -->
+              <div class="space-y-1 text-sm pt-2 border-t border-default">
+                <p class="flex items-center gap-2">
+                  <span class="font-medium">Label:</span>
+                  <UBadge :color="labelColor" variant="soft">{{ result.label }}</UBadge>
+                </p>
+                <p class="flex items-center gap-2">
+                  <span class="font-medium">Defect type:</span>
+                  <UBadge :color="defectTypeColor" variant="soft">{{ defectTypeText }}</UBadge>
+                </p>
+              </div>
             </div>
             <p v-else class="text-sm text-muted">Run a prediction to see results.</p>
           </UCard>

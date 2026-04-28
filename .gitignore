@@ -23,6 +23,7 @@ logs/
 # Models / datasets (large files)
 checkpoints/
 mvtec_anomaly_detection/
+test_img/
 
 # Frontend (Nuxt)
 web/node_modules/
