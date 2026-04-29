@@ -29,9 +29,9 @@ Sau khi tăng số epoch từ 30 lên **100** và chuyển sang kiến trúc **m
 
 ## 2. Phân tích Evaluation Charts
 
-### 2.1. ROC Curve (Image-level)
+![Evaluation Charts](image.png)
 
-![ROC Curve](outputs/evaluation_report.png)
+### 2.1. ROC Curve (Image-level)
 
 - **AUC = 0.9557**
 - Đường cong nằm rất gần góc trên-trái, cho thấy khả năng phân biệt **Good/Defect xuất sắc**.
@@ -115,7 +115,7 @@ Phân phối điểm anomaly của hai lớp:
 
 ## 3. Phân tích Visualization
 
-![Sample Visualizations](outputs/sample_visualizations.png)
+![Sample Visualizations](intro.png)
 
 Các ảnh trong `sample_visualizations.png` được chia thành 4 cột:
 

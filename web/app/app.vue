@@ -15,6 +15,12 @@ type PredictResponse = {
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBase
 
+const colorMode = useColorMode()
+const isDark = computed(() => colorMode.value === 'dark')
+function toggleTheme() {
+  colorMode.preference = isDark.value ? 'light' : 'dark'
+}
+
 const threshold = ref(0.5)
 const imageFile = ref<File | null>(null)
 const imagePreview = ref('')
@@ -159,8 +165,16 @@ async function runPrediction() {
       <div class="space-y-6">
         <UCard class="rounded-2xl border border-default/70 shadow-sm">
           <template #header>
-            <div class="space-y-1">
+            <div class="flex items-center justify-between">
               <h1 class="text-2xl font-semibold">EfficientAD Detection</h1>
+              <UButton
+                variant="ghost"
+                color="neutral"
+                :icon="isDark ? 'i-lucide-sun' : 'i-lucide-moon'"
+                @click="toggleTheme"
+              >
+                {{ isDark ? 'Light' : 'Dark' }}
+              </UButton>
             </div>
           </template>
 

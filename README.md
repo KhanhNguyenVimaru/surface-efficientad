@@ -2,6 +2,14 @@
 
 This project is fixed to **capsule-only inference** using `checkpoints/capsule.ckpt`.
 
+## Demo
+
+| Prediction Summary | Anomaly Visualization |
+|---|---|
+| ![Evaluation Report](tests/intro.png) | ![Sample Visualization](tests/image.png) |
+
+> **Note:** Run `python tests/run_all_tests.py` to regenerate evaluation charts.
+
 ## 1. Train Capsule Model (Original Repo)
 
 Original training repo:

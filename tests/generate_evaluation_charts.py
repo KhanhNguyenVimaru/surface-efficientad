@@ -3,17 +3,12 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
-from sklearn.metrics import (
-    auc,
-    confusion_matrix,
-    precision_recall_curve,
-    roc_curve,
-)
+from sklearn.metrics import auc, confusion_matrix, precision_recall_curve, roc_curve
 
 from anomalib.data import MVTecAD
 from anomalib.engine import Engine
 from anomalib.models import EfficientAd
+from anomalib.models.image.efficient_ad.lightning_model import EfficientAdModelSize
 
 
 def to_scalar(value):
@@ -78,18 +73,15 @@ def collect_predictions(engine, model, datamodule, ckpt_path):
     if not raw_predictions:
         raise ValueError("No predictions returned.")
     predictions = [squeeze_batch(p) for p in raw_predictions]
-
     test_dataset = get_test_dataset(datamodule)
     if len(predictions) != len(test_dataset):
         print(f"Warning: predictions count ({len(predictions)}) != dataset count ({len(test_dataset)})")
-
     scores = []
     labels = []
     for i in range(len(predictions)):
         pred = predictions[i]
         score = to_scalar(_get_attr(pred, "pred_score"))
         scores.append(score if score is not None else 0.0)
-
         item = test_dataset[i] if i < len(test_dataset) else None
         if item is not None:
             lbl = _get_attr(item, "gt_label")
@@ -98,15 +90,10 @@ def collect_predictions(engine, model, datamodule, ckpt_path):
             labels.append(int(lbl) if lbl is not None else 0)
         else:
             labels.append(0)
-
     return np.array(scores, dtype=np.float32), np.array(labels, dtype=np.int32)
 
 
 def compute_threshold_youden(scores, labels):
-    """
-    Youden index = argmax(TPR - FPR).
-    Trả về threshold tối ưu trên ROC curve.
-    """
     fpr, tpr, thresholds = roc_curve(labels, scores)
     youden = tpr - fpr
     best_idx = np.argmax(youden)
@@ -116,10 +103,6 @@ def compute_threshold_youden(scores, labels):
 
 
 def compute_threshold_percentile(scores, labels, percentile=95):
-    """
-    Lấy percentile cao của Good scores làm ngưỡng.
-    Mặc định 95%: chỉ 5% good samples bị false alarm.
-    """
     good_scores = scores[labels == 0]
     if len(good_scores) == 0:
         print("Warning: no good samples found, fallback to median of all scores.")
@@ -142,37 +125,23 @@ def plot_confusion_matrix(ax, labels, scores, threshold, title_suffix=""):
     ax.set_xlabel("Predicted Label")
     ax.set_ylabel("True Label")
     ax.set_title(f"CM (thr={threshold:.4f}){title_suffix}")
-
     thresh_color = cm.max() / 2.0
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            ax.text(
-                j, i, format(cm[i, j], "d"),
-                ha="center", va="center",
-                color="white" if cm[i, j] > thresh_color else "black",
-                fontsize=14,
-            )
-
-    # Tính accuracy, precision, recall, f1 để annotate
+            ax.text(j, i, format(cm[i, j], "d"), ha="center", va="center", color="white" if cm[i, j] > thresh_color else "black", fontsize=14)
     tn, fp, fn, tp = cm.ravel()
     acc = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
     prec = tp / (tp + fp) if (tp + fp) > 0 else 0
     rec = tp / (tp + fn) if (tp + fn) > 0 else 0
     f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0
-    ax.text(
-        0.5, -0.15,
-        f"Acc={acc:.3f}  Prec={prec:.3f}  Rec={rec:.3f}  F1={f1:.3f}",
-        transform=ax.transAxes,
-        ha="center", va="top", fontsize=10,
-    )
+    ax.text(0.5, -0.15, f"Acc={acc:.3f}  Prec={prec:.3f}  Rec={rec:.3f}  F1={f1:.3f}", transform=ax.transAxes, ha="center", va="top", fontsize=10)
 
 
 def plot_evaluation_report(scores, labels, output_path, thr_youden=None, thr_percentile=None):
     fig, axes = plt.subplots(2, 3, figsize=(18, 12))
     fig.suptitle("EfficientAD Capsule — Evaluation Charts", fontsize=16, fontweight="bold")
-
-    # 1. ROC Curve
-    fpr, tpr, roc_thresholds = roc_curve(labels, scores)
+    # ROC
+    fpr, tpr, _ = roc_curve(labels, scores)
     roc_auc = auc(fpr, tpr)
     ax = axes[0, 0]
     ax.plot(fpr, tpr, color="darkorange", lw=2, label=f"ROC curve (AUC = {roc_auc:.4f})")
@@ -184,8 +153,7 @@ def plot_evaluation_report(scores, labels, output_path, thr_youden=None, thr_per
     ax.set_title("ROC Curve (Image-level)")
     ax.legend(loc="lower right")
     ax.grid(alpha=0.3)
-
-    # 2. Precision-Recall Curve
+    # PR
     precision, recall, _ = precision_recall_curve(labels, scores)
     pr_auc = auc(recall, precision)
     ax = axes[0, 1]
@@ -197,33 +165,27 @@ def plot_evaluation_report(scores, labels, output_path, thr_youden=None, thr_per
     ax.set_title("Precision-Recall Curve (Image-level)")
     ax.legend(loc="lower left")
     ax.grid(alpha=0.3)
-
-    # 3. Score Distribution Histogram
+    # Histogram
     ax = axes[0, 2]
     good_scores = scores[labels == 0]
     defect_scores = scores[labels == 1]
     bins = np.linspace(min(scores.min(), 0), max(scores.max(), 1), 50)
     ax.hist(good_scores, bins=bins, alpha=0.6, label="Good", color="green", edgecolor="black")
     ax.hist(defect_scores, bins=bins, alpha=0.6, label="Defect", color="red", edgecolor="black")
-
     if thr_youden is not None:
         ax.axvline(thr_youden, color="blue", linestyle="--", lw=2, label=f"Youden thr = {thr_youden:.4f}")
     if thr_percentile is not None:
         ax.axvline(thr_percentile, color="magenta", linestyle=":", lw=2, label=f"P95 thr = {thr_percentile:.4f}")
-
     ax.set_xlabel("Anomaly Score")
     ax.set_ylabel("Frequency")
     ax.set_title("Anomaly Score Distribution")
     ax.legend()
     ax.grid(axis="y", alpha=0.3)
-
-    # 4. Confusion Matrix — Youden
+    # CM Youden
     plot_confusion_matrix(axes[1, 0], labels, scores, thr_youden if thr_youden is not None else 0.5, title_suffix=" Youden")
-
-    # 5. Confusion Matrix — Percentile
+    # CM P95
     plot_confusion_matrix(axes[1, 1], labels, scores, thr_percentile if thr_percentile is not None else 0.5, title_suffix=" P95")
-
-    # 6. Metrics Comparison Bar Chart
+    # Metrics comparison
     ax = axes[1, 2]
     def get_metrics(labels, scores, thr):
         pred = (scores >= thr).astype(int)
@@ -236,10 +198,8 @@ def plot_evaluation_report(scores, labels, output_path, thr_youden=None, thr_per
         rec = tp / (tp + fn) if (tp + fn) > 0 else 0
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0
         return acc, prec, rec, f1
-
     youden_metrics = get_metrics(labels, scores, thr_youden) if thr_youden is not None else (0,0,0,0)
     perc_metrics = get_metrics(labels, scores, thr_percentile) if thr_percentile is not None else (0,0,0,0)
-
     x = np.arange(4)
     width = 0.35
     labels_bar = ["Accuracy", "Precision", "Recall", "F1"]
@@ -252,12 +212,9 @@ def plot_evaluation_report(scores, labels, output_path, thr_youden=None, thr_per
     ax.set_title("Metrics Comparison")
     ax.legend()
     ax.grid(axis="y", alpha=0.3)
-
     for bar in bars1 + bars2:
         height = bar.get_height()
-        ax.annotate(f"{height:.3f}", xy=(bar.get_x() + bar.get_width()/2, height),
-                    xytext=(0, 3), textcoords="offset points", ha="center", va="bottom", fontsize=9)
-
+        ax.annotate(f"{height:.3f}", xy=(bar.get_x() + bar.get_width()/2, height), xytext=(0, 3), textcoords="offset points", ha="center", va="bottom", fontsize=9)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
@@ -265,58 +222,20 @@ def plot_evaluation_report(scores, labels, output_path, thr_youden=None, thr_per
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate evaluation charts with auto-calculated thresholds."
-    )
-    parser.add_argument(
-        "--dataset-root",
-        type=Path,
-        default=Path("mvtec_anomaly_detection"),
-        help="Path to MVTec AD root folder.",
-    )
-    parser.add_argument(
-        "--ckpt",
-        type=Path,
-        default=Path("checkpoints/capsule.ckpt"),
-        help="Path to checkpoint (.ckpt).",
-    )
-    parser.add_argument(
-        "--num-workers",
-        type=int,
-        default=0,
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("outputs"),
-    )
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=None,
-        help="Manual threshold. If not set, auto-calculate from Youden + percentile.",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset-root", type=Path, default=Path("test_img"))
+    parser.add_argument("--ckpt", type=Path, default=Path("checkpoints/capsule.ckpt"))
+    parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    parser.add_argument("--threshold", type=float, default=None)
     args = parser.parse_args()
-
-    if not (args.dataset_root / "capsule").is_dir():
-        raise FileNotFoundError(f"Missing dataset folder: {args.dataset_root / 'capsule'}")
     if not args.ckpt.exists():
         raise FileNotFoundError(f"Missing checkpoint: {args.ckpt}")
-
     args.output_dir.mkdir(parents=True, exist_ok=True)
-
-    datamodule = MVTecAD(
-        root=args.dataset_root,
-        category="capsule",
-        train_batch_size=1,
-        eval_batch_size=1,
-        num_workers=args.num_workers,
-    )
-    model = EfficientAd()
+    datamodule = MVTecAD(root=args.dataset_root, category="capsule", train_batch_size=1, eval_batch_size=1, num_workers=args.num_workers)
+    model = EfficientAd(model_size=EfficientAdModelSize.M)
     engine = Engine()
-
     scores, labels = collect_predictions(engine, model, datamodule, args.ckpt)
-
     if args.threshold is not None:
         print(f"Using MANUAL threshold = {args.threshold}")
         thr_youden = args.threshold
@@ -325,14 +244,7 @@ def main():
         print("Auto-calculating optimal thresholds...")
         thr_youden = compute_threshold_youden(scores, labels)
         thr_percentile = compute_threshold_percentile(scores, labels, percentile=95)
-
-    plot_evaluation_report(
-        scores, labels,
-        output_path=args.output_dir / "evaluation_report.png",
-        thr_youden=thr_youden,
-        thr_percentile=thr_percentile,
-    )
-
+    plot_evaluation_report(scores, labels, output_path=args.output_dir / "evaluation_report.png", thr_youden=thr_youden, thr_percentile=thr_percentile)
 
 if __name__ == "__main__":
     main()

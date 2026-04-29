@@ -4,6 +4,7 @@ from pathlib import Path
 from anomalib.data import MVTecAD
 from anomalib.engine import Engine
 from anomalib.models import EfficientAd
+from anomalib.models.image.efficient_ad.lightning_model import EfficientAdModelSize
 
 
 def main() -> None:
@@ -13,7 +14,7 @@ def main() -> None:
     parser.add_argument(
         "--dataset-root",
         type=Path,
-        default=Path("mvtec_anomaly_detection"),
+        default=Path("test_img"),
         help="Path to MVTec AD root folder (contains capsule/).",
     )
     parser.add_argument(
@@ -31,7 +32,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if not (args.dataset_root / "capsule").is_dir():
-        raise FileNotFoundError(f"Missing dataset folder: {args.dataset_root / 'capsule'}")
+        if not (args.dataset_root / "good").is_dir():
+            raise FileNotFoundError(f"Missing dataset folder: {args.dataset_root}")
     if not args.ckpt.exists():
         raise FileNotFoundError(f"Missing checkpoint: {args.ckpt}")
 
@@ -42,7 +44,7 @@ def main() -> None:
         eval_batch_size=1,
         num_workers=args.num_workers,
     )
-    model = EfficientAd()
+    model = EfficientAd(model_size=EfficientAdModelSize.M)
     engine = Engine()
 
     metrics = engine.test(model=model, datamodule=datamodule, ckpt_path=args.ckpt)

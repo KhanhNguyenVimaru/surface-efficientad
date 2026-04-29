@@ -17,7 +17,7 @@ def run_script(name, args):
 
 
 def main():
-    dataset_root = "mvtec_anomaly_detection"
+    dataset_root = "test_img"
     ckpt = "checkpoints/capsule.ckpt"
     output_dir = "outputs"
 

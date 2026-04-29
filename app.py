@@ -26,7 +26,7 @@ else:
 
 BASE_DIR = Path(__file__).resolve().parent
 CHECKPOINT_DIR = BASE_DIR / "checkpoints"
-CAPSULE_TEST_DIR = BASE_DIR / "mvtec_anomaly_detection" / "capsule" / "test"
+CAPSULE_TEST_DIR = BASE_DIR / "test_img"
 CAPSULE_CLASSES = ["crack", "faulty_imprint", "good", "poke", "scratch", "squeeze"]
 MODEL_PATHS = {
     "capsule": CHECKPOINT_DIR / "capsule.ckpt",
