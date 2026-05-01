@@ -10,6 +10,10 @@ type PredictResponse = {
   anomaly_map_base64: string | null
   anomaly_overlay_base64?: string | null
   pred_mask_overlay_base64?: string | null
+  // Classical CV
+  defect_count: number | null
+  largest_defect_area: number | null
+  classical_overlay_base64?: string | null
 }
 
 const config = useRuntimeConfig()
@@ -28,6 +32,20 @@ const loading = ref(false)
 const errorMessage = ref('')
 const result = ref<PredictResponse | null>(null)
 
+const zoomImageSrc = ref('')
+const zoomOpen = ref(false)
+
+function openZoom(src: string) {
+  if (!src) return
+  zoomImageSrc.value = src
+  zoomOpen.value = true
+}
+
+function closeZoom() {
+  zoomOpen.value = false
+  zoomImageSrc.value = ''
+}
+
 const heatmapSrc = computed(() => {
   if (!result.value?.anomaly_map_base64) return ''
   return `data:image/png;base64,${result.value.anomaly_map_base64}`
@@ -41,6 +59,11 @@ const anomalyOverlaySrc = computed(() => {
 const predMaskOverlaySrc = computed(() => {
   if (!result.value?.pred_mask_overlay_base64) return ''
   return `data:image/png;base64,${result.value.pred_mask_overlay_base64}`
+})
+
+const classicalOverlaySrc = computed(() => {
+  if (!result.value?.classical_overlay_base64) return ''
+  return `data:image/png;base64,${result.value.classical_overlay_base64}`
 })
 
 const labelColor = computed(() => {
@@ -161,7 +184,7 @@ async function runPrediction() {
 <template>
   <UApp>
     <NuxtRouteAnnouncer />
-    <UContainer class="py-8 max-w-5xl">
+    <UContainer class="py-8 max-w-6xl">
       <div class="space-y-6">
         <UCard class="rounded-2xl border border-default/70 shadow-sm">
           <template #header>
@@ -272,18 +295,20 @@ async function runPrediction() {
                   <span class="font-medium">Defect type:</span>
                   <UBadge :color="defectTypeColor" variant="soft">{{ defectTypeText }}</UBadge>
                 </p>
+                <p><span class="font-medium">Defect count (CV):</span> {{ result.defect_count ?? 'N/A' }}</p>
+                <p><span class="font-medium">Largest area (CV):</span> {{ result.largest_defect_area ? result.largest_defect_area.toFixed(0) + ' px²' : 'N/A' }}</p>
               </div>
             </div>
             <p v-else class="text-sm text-muted">Run a prediction to see results.</p>
           </UCard>
         </div>
 
-        <div class="grid gap-6 md:grid-cols-3">
+        <div class="grid gap-6 md:grid-cols-2">
           <UCard class="rounded-2xl border border-default/70 shadow-sm">
             <template #header>
               <h2 class="font-semibold">Anomaly Map</h2>
             </template>
-            <img v-if="heatmapSrc" :src="heatmapSrc" alt="Anomaly map" class="h-[320px] w-full rounded-md border border-default object-contain bg-elevated">
+            <img v-if="heatmapSrc" :src="heatmapSrc" alt="Anomaly map" class="h-[240px] w-full rounded-md border border-default object-contain bg-elevated cursor-pointer hover:opacity-90 transition-opacity" @click="openZoom(heatmapSrc)">
             <p v-else class="text-sm text-muted">No anomaly map available.</p>
           </UCard>
 
@@ -291,17 +316,35 @@ async function runPrediction() {
             <template #header>
               <h2 class="font-semibold">Image + Anomaly Map</h2>
             </template>
-            <img v-if="anomalyOverlaySrc" :src="anomalyOverlaySrc" alt="Image and anomaly map overlay" class="h-[320px] w-full rounded-md border border-default object-contain bg-elevated">
+            <img v-if="anomalyOverlaySrc" :src="anomalyOverlaySrc" alt="Image and anomaly map overlay" class="h-[240px] w-full rounded-md border border-default object-contain bg-elevated cursor-pointer hover:opacity-90 transition-opacity" @click="openZoom(anomalyOverlaySrc)">
             <p v-else class="text-sm text-muted">No anomaly overlay available.</p>
           </UCard>
+        </div>
 
+        <div class="grid gap-6 md:grid-cols-2">
           <UCard class="rounded-2xl border border-default/70 shadow-sm">
             <template #header>
               <h2 class="font-semibold">Image + Pred Mask</h2>
             </template>
-            <img v-if="predMaskOverlaySrc" :src="predMaskOverlaySrc" alt="Image and prediction mask overlay" class="h-[320px] w-full rounded-md border border-default object-contain bg-elevated">
+            <img v-if="predMaskOverlaySrc" :src="predMaskOverlaySrc" alt="Image and prediction mask overlay" class="h-[240px] w-full rounded-md border border-default object-contain bg-elevated cursor-pointer hover:opacity-90 transition-opacity" @click="openZoom(predMaskOverlaySrc)">
             <p v-else class="text-sm text-muted">No prediction mask overlay available.</p>
           </UCard>
+
+          <UCard class="rounded-2xl border border-default/70 shadow-sm">
+            <template #header>
+              <h2 class="font-semibold">Image + Contours (CV)</h2>
+            </template>
+            <img v-if="classicalOverlaySrc" :src="classicalOverlaySrc" alt="Image and contour overlay from classical CV" class="h-[240px] w-full rounded-md border border-default object-contain bg-elevated cursor-pointer hover:opacity-90 transition-opacity" @click="openZoom(classicalOverlaySrc)">
+            <p v-else class="text-sm text-muted">No classical overlay available.</p>
+          </UCard>
+        </div>
+
+        <!-- Zoom Modal -->
+        <div v-if="zoomOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" @click="closeZoom">
+          <div class="relative max-h-[90vh] max-w-[90vw]">
+            <img :src="zoomImageSrc" alt="Zoomed" class="max-h-[90vh] max-w-[90vw] rounded-lg border border-white/20 object-contain">
+            <button class="absolute -top-3 -right-3 bg-white text-black rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-lg hover:bg-gray-200" @click.stop="closeZoom">✕</button>
+          </div>
         </div>
       </div>
     </UContainer>

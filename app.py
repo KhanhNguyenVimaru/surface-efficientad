@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 from pydantic import BaseModel
 
+from classical_cv_utils import postprocess_anomaly_map, draw_contours_on_image
+
 try:
     from anomalib.engine import Engine
     from anomalib.models import EfficientAd
@@ -55,6 +57,10 @@ class PredictResponse(BaseModel):
     anomaly_map_base64: str | None
     anomaly_overlay_base64: str | None
     pred_mask_overlay_base64: str | None
+    # Classical CV metadata
+    defect_count: int | None
+    largest_defect_area: float | None
+    classical_overlay_base64: str | None
 
 
 def to_scalar(value: Any) -> float | None:
@@ -418,6 +424,39 @@ async def predict(
         pil_image, anomaly_map, pred_mask=pred_mask, threshold=mask_threshold
     )
 
+    # ── Classical CV post-processing ──
+    defect_count = None
+    largest_defect_area = None
+    classical_overlay_base64 = None
+
+    if anomaly_map is not None:
+        try:
+            # Chuẩn hóa anomaly_map về [0,1] float32
+            if hasattr(anomaly_map, "detach"):
+                am_np = anomaly_map.detach().cpu().numpy()
+            else:
+                am_np = np.array(anomaly_map)
+            am_np = np.squeeze(am_np).astype(np.float32)
+            if am_np.max() > 1.0:
+                am_np = am_np / 255.0
+
+            cleaned_mask, defects = postprocess_anomaly_map(
+                am_np,
+                threshold=mask_threshold,
+                open_kernel=3,
+                close_kernel=3,
+                min_contour_area=30,
+            )
+            defect_count = len(defects)
+            largest_defect_area = defects[0].area if defects else 0.0
+
+            # Vẽ contour lên ảnh gốc
+            image_np = np.asarray(pil_image.convert("RGB"), dtype=np.uint8)
+            contoured = draw_contours_on_image(image_np, defects, color=(0, 255, 0), thickness=2)
+            classical_overlay_base64 = encode_rgb_to_base64(contoured)
+        except Exception as e:
+            print(f"Classical CV post-processing skipped: {e}")
+
     return PredictResponse(
         model=model_name,
         threshold=threshold,
@@ -429,4 +468,7 @@ async def predict(
         anomaly_map_base64=encoded_map,
         anomaly_overlay_base64=encoded_overlay,
         pred_mask_overlay_base64=encoded_pred_overlay,
+        defect_count=defect_count,
+        largest_defect_area=largest_defect_area,
+        classical_overlay_base64=classical_overlay_base64,
     )
