@@ -1,45 +1,30 @@
 # EfficientAD Web App (FastAPI + Nuxt UI)
 
-This project is fixed to **capsule-only inference** using `checkpoints/capsule.ckpt`.
+A web application for surface anomaly detection on capsules using the EfficientAD model. The project consists of a FastAPI backend for inference and a Nuxt UI frontend, allowing users to easily upload images, adjust the detection threshold, and inspect detailed defect results.
 
-## Demo
+## App Overview
 
-| Prediction Summary | Anomaly Visualization |
-|---|---|
-| ![Evaluation Report](tests/intro.png) | ![Sample Visualization](tests/image.png) |
+The web interface supports:
+- Uploading an input image and adjusting the threshold (0–1).
+- Previewing the original image.
+- Prediction summary: anomaly score, label (Defect/Good), defect type, defect count, and largest defect area.
+- Visualizations: Anomaly Map, Image + Anomaly Map overlay, Predicted Mask, and Contours (OpenCV).
 
-> **Note:** Run `python tests/run_all_tests.py` to regenerate evaluation charts.
+![EfficientAD App Interface](tests/image%20copy.png)
 
-## 1. Train Capsule Model (Original Repo)
+## Setup & Run
 
-Original training repo:
-`https://github.com/KhanhNguyenVimaru/surface-efficientad-model`
+> **Note:** This project is fixed to the **capsule** model at `checkpoints/capsule.ckpt`.
 
-Colab training command:
+### 1. Prepare the checkpoint
 
-```bash
-%cd /content/surface-efficientad-model
-
-!python train_efficientad.py \
-  --data-root /content \
-  --category capsule \
-  --max-epochs 30 \
-  --batch-size 1 \
-  --image-size 256 \
-  --devices 1 \
-  --accelerator gpu \
-  --model-size s
-```
-
-## 2. Copy Checkpoint
-
-After training, copy checkpoint into this project:
+After training in the original repo ([surface-efficientad-model](https://github.com/KhanhNguyenVimaru/surface-efficientad-model)), copy the checkpoint into this project:
 
 ```bash
 checkpoints/capsule.ckpt
 ```
 
-## 3. Run Backend (FastAPI)
+### 2. Run the Backend (FastAPI)
 
 Install dependencies:
 
@@ -47,22 +32,19 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Run server:
+Start the server:
 
 ```bash
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API docs:
-`http://localhost:8000/docs`
+- API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Main endpoints:
+  - `GET /health`
+  - `GET /models`
+  - `POST /predict` (multipart form: `image`, `threshold`)
 
-### Backend APIs
-
-- `GET /health`
-- `GET /models`
-- `POST /predict` (multipart form: `image`, `threshold`)
-
-## 4. Run Frontend (Nuxt)
+### 3. Run the Frontend (Nuxt)
 
 ```bash
 cd web
@@ -70,5 +52,14 @@ npm install
 npm run dev
 ```
 
-Frontend URL:
-`http://localhost:3000`
+Access the frontend: [http://localhost:3000](http://localhost:3000)
+
+---
+
+## Evaluation Metrics Overview
+
+The EfficientAD model is evaluated on the **capsule** dataset with comprehensive performance metrics, including ROC curve, Precision–Recall curve, anomaly score distribution, confusion matrices, and a metrics comparison (Accuracy, Precision, Recall, F1) across optimal thresholds.
+
+See the full evaluation report at: [BAO_CAO_EVALUATION.md](https://github.com/KhanhNguyenVimaru/surface-efficientad/blob/main/docs/BAO_CAO_EVALUATION.md)
+
+![Model Evaluation Charts](tests/image.png)
